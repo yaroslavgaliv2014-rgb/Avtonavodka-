@@ -1,5 +1,7 @@
 --[[
-    ПОКРАЩЕНА АВТОНАВОДКА (точне наведення + резервна ціль)
+    УНІВЕРСАЛЬНА АВТОНАВОДКА (емуляція миші)
+    Працює навіть якщо гра блокує CFrame камери.
+    Натисніть [Tab] або кнопку GUI для вмикання/вимикання.
 ]]--
 
 local Players = game:GetService("Players")
@@ -10,12 +12,13 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 if not Camera then repeat wait() until workspace.CurrentCamera; Camera = workspace.CurrentCamera end
 
-local OriginalCameraType = Camera.CameraType
-
 local AimbotEnabled = false
-local Smoothness = 0.08  -- <-- ЗМІНЕНО: майже миттєве наведення (було 0.25)
+local Smoothness = 0.15  -- Плавність (0.1 - швидко, 0.3 - плавно)
 
--- Функція пошуку найближчого гравця (тепер цілиться в голову або центр тіла)
+-- Отримуємо об'єкт миші
+local Mouse = LocalPlayer:GetMouse()
+
+-- Пошук найближчого гравця до центру екрану
 local function getClosestTarget()
     local Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     local BestTarget = nil
@@ -24,90 +27,56 @@ local function getClosestTarget()
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         if not player.Character then continue end
-        
-        -- Спершу шукаємо голову
-        local TargetPart = player.Character:FindFirstChild("Head")
-        -- Якщо голови немає (наприклад, персонаж без голови) – беремо HumanoidRootPart
-        if not TargetPart then
-            TargetPart = player.Character:FindFirstChild("HumanoidRootPart")
-        end
+
+        -- Шукаємо голову, якщо немає - беремо центр тіла
+        local TargetPart = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
         if not TargetPart then continue end
 
         local Humanoid = player.Character:FindFirstChildOfClass("Humanoid")
         if not Humanoid or Humanoid.Health <= 0 then continue end
 
-        -- ПЕРЕВІРКА СТІН - зараз вимкнена (щоб наводити крізь усе)
-        -- Якщо хочеш ввімкнути анти-стіни - розкоментуй наступний блок
-        --[[
-        local RaycastParams = RaycastParams.new()
-        RaycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-        RaycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
-        local Origin = Camera.CFrame.Position
-        local Direction = (TargetPart.Position - Origin).Unit * 1000
-        local Hit = workspace:Raycast(Origin, Direction, RaycastParams)
-        if Hit and Hit.Instance and not Hit.Instance:IsDescendantOf(player.Character) then
-            continue
-        end
-        ]]
-
+        -- Отримуємо координати на екрані
         local ScreenPos, OnScreen = Camera:WorldToScreenPoint(TargetPart.Position)
         if not OnScreen then continue end
-        
+
+        -- Відстань від центру
         local Dist = (Vector2.new(ScreenPos.X, ScreenPos.Y) - Center).Magnitude
         if Dist < BestDistance then
             BestDistance = Dist
-            BestTarget = TargetPart
+            BestTarget = {ScreenPos, player}
         end
     end
-    
+
     return BestTarget
 end
 
--- Основний цикл
+-- Головний цикл (виконується кожен кадр)
 local function onRender()
-    if not AimbotEnabled then
-        if Camera.CameraType == Enum.CameraType.Scriptable then
-            Camera.CameraType = OriginalCameraType
-        end
-        return
-    end
-    
-    Camera.CameraType = Enum.CameraType.Scriptable  -- Фіксуємо камеру кожен кадр
-    
+    if not AimbotEnabled then return end
+
     local Target = getClosestTarget()
-    if not Target then
-        -- Якщо цілі немає, оновлюємо текст кнопки
-        Button.Text = "🔴 Немає цілі"
-        return
-    end
-    
-    -- Оновлюємо текст кнопки з ім'ям гравця (для наочності)
-    local playerName = "Невідомий"
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr.Character and Target:IsDescendantOf(plr.Character) then
-            playerName = plr.Name
-            break
-        end
-    end
-    Button.Text = "🎯 " .. playerName
-    
-    -- Плавне наведення
-    local CurrentCF = Camera.CFrame
-    local TargetPos = Target.Position
-    local NewCF = CFrame.new(CurrentCF.Position, TargetPos)
-    
-    Camera.CFrame = CurrentCF:Lerp(NewCF, Smoothness)
+    if not Target then return end
+
+    local ScreenPos = Target[1]
+    local Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    -- Обчислюємо, на скільки пікселів потрібно зрушити мишу
+    local DeltaX = (ScreenPos.X - Center.X) * Smoothness
+    local DeltaY = (ScreenPos.Y - Center.Y) * Smoothness
+
+    -- Емулюємо рух миші (основна магія!)
+    Mouse.Move(DeltaX, DeltaY)
 end
 
-local RenderConnection = RunService.RenderStepped:Connect(onRender)
+RunService.RenderStepped:Connect(onRender)
 
--- ========== GUI ==========
+-- ===== ГРАФІЧНИЙ ІНТЕРФЕЙС =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.IgnoreGuiInset = true
 
 local Button = Instance.new("TextButton")
-Button.Size = UDim2.new(0, 200, 0, 50)  -- трохи ширше, щоб вміщало ім'я
+Button.Size = UDim2.new(0, 200, 0, 50)
 Button.Position = UDim2.new(0, 20, 0, 20)
 Button.Text = "🔴 Aimbot OFF"
 Button.TextColor3 = Color3.new(1, 1, 1)
@@ -118,6 +87,7 @@ Button.Parent = ScreenGui
 
 local function updateButtonStyle()
     if AimbotEnabled then
+        Button.Text = "🟢 Aimbot ON"
         Button.BackgroundColor3 = Color3.new(0.1, 0.7, 0.1)
     else
         Button.Text = "🔴 Aimbot OFF"
@@ -125,31 +95,20 @@ local function updateButtonStyle()
     end
 end
 
+-- Натискання кнопки мишею
 Button.MouseButton1Click:Connect(function()
     AimbotEnabled = not AimbotEnabled
-    if not AimbotEnabled then
-        Button.Text = "🔴 Aimbot OFF"
-    end
     updateButtonStyle()
 end)
 
+-- Гаряча клавіша [Tab]
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.Tab then
         AimbotEnabled = not AimbotEnabled
-        if not AimbotEnabled then
-            Button.Text = "🔴 Aimbot OFF"
-        end
         updateButtonStyle()
     end
 end)
 
-LocalPlayer.AncestryChanged:Connect(function()
-    if not LocalPlayer.Parent then
-        RenderConnection:Disconnect()
-        ScreenGui:Destroy()
-    end
-end)
-
 updateButtonStyle()
-print("✅ Автонаводка завантажена! Натисніть [Tab] або кнопку. Наводиться чітко в голову/тіло.")
+print("✅ Автонаводка завантажена! Натисніть [Tab] для перемикання.")
