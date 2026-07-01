@@ -1,10 +1,11 @@
--- ОНОВЛЕНИЙ СКРИПТ: НОВИЙ СТИЛЬ LOCK/UNLOCK + ФІКС ХОДИ
+-- ОНОВЛЕНИЙ СКРИПТ: ДОДАНО GOD MODE
 local v0=game:GetService("Players");local v1=v0.LocalPlayer;local v2=game:GetService("UserInputService");local v3=game:GetService("RunService");local v4=workspace.CurrentCamera;local v5={AimEnabled=false,AimPart="Head",TeamCheck=true,WallCheck=false,Ignore096=true,AimbotFOV=450,ESP_Enabled=false,Speed=16,ShowWallUI=false};
 
 -- 🔥 ЗМІННІ ДЛЯ ФІКСАЦІЇ ТА РУХУ
 local lockedTarget = nil
 local isLocked = false
-local isMoving = false -- Флаг руху
+local isMoving = false
+local godModeEnabled = false  -- НОВА ЗМІННА ДЛЯ GOD MODE
 
 -- ВІДСЛІДКОВУЄМО НАТИСКАННЯ КЛАВІШ РУХУ (WASD)
 v2.InputBegan:Connect(function(input)
@@ -132,8 +133,7 @@ local function createButton(text, configKey, order)
 end
 
 -- КНОПКИ В ПОРЯДКУ
-createButton("Speed", "Speed", 1)  -- Це поле введення, його обробимо окремо
--- ТОМУ SPEED РОБИМО ВРУЧНУ
+-- SPEED (окремо)
 local speedBox = Instance.new("TextBox", v29)
 speedBox.Size = UDim2.new(1,0,0,35)
 speedBox.BackgroundColor3 = Color3.fromRGB(0,0,0)
@@ -151,14 +151,35 @@ speedBox.FocusLost:Connect(function() v5.Speed = tonumber(speedBox.Text:match("%
 createButton("Aimbot Master", "AimEnabled", 2)
 createButton("Visuals ESP", "ESP_Enabled", 3)
 
--- 🔥 НОВІ КНОПКИ LOCK / UNLOCK (ТАКОГО Ж СТИЛЮ)
+-- 🔥 НОВІ КНОПКИ LOCK / UNLOCK
 local lockBtn, lockLabel = v15(v29, UDim2.new(1,0,0,35), UDim2.new(0,0,0,0), "🔒 Lock")
 lockBtn.LayoutOrder = 4
-lockLabel.Text = "🔒 Lock"  -- Початковий текст
+lockLabel.Text = "🔒 Lock"
 
 local unlockBtn, unlockLabel = v15(v29, UDim2.new(1,0,0,35), UDim2.new(0,0,0,0), "🔓 Unlock")
 unlockBtn.LayoutOrder = 5
 unlockLabel.Text = "🔓 Unlock"
+
+-- 🛡️ НОВА КНОПКА GOD MODE
+local godBtn, godLabel = v15(v29, UDim2.new(1,0,0,35), UDim2.new(0,0,0,0), "God Mode: OFF")
+godBtn.LayoutOrder = 6
+
+-- ЛОГІКА GOD MODE (ЗМІННА godModeEnabled ВЖЕ Є)
+godBtn.MouseButton1Click:Connect(function()
+    godModeEnabled = not godModeEnabled
+    if godModeEnabled then
+        godLabel.Text = "God Mode: ON"
+        godBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        print("🛡️ God Mode ACTIVATED")
+        -- Запускаємо захист
+        EnableGodMode()
+    else
+        godLabel.Text = "God Mode: OFF"
+        godBtn.BackgroundColor3 = Color3.new(1,1,1)
+        print("🛡️ God Mode DEACTIVATED")
+        DisableGodMode()
+    end
+end)
 
 -- ЛОГІКА LOCK
 lockBtn.MouseButton1Click:Connect(function()
@@ -201,6 +222,87 @@ v47.Visible=false;v12(v47);Instance.new("UIStroke",v47).Color=Color3.fromRGB(150
 v51.MouseButton1Click:Connect(function() v16.Visible=false;v47.Visible=true;end);
 v47.MouseButton1Click:Connect(function() v16.Visible=true;v47.Visible=false;end);
 
+-- =====================================================
+-- 🛡️ ФУНКЦІЇ GOD MODE
+-- =====================================================
+local godConnections = {}  -- Масив для зберігання підключень
+
+function EnableGodMode()
+    -- Отримуємо персонажа та Humanoid
+    local char = v1.Character
+    if not char then return end
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum then return end
+    
+    -- Метод 1: Блокування функції TakeDamage
+    if not hum._oldTakeDamage then
+        hum._oldTakeDamage = hum.TakeDamage
+        hum.TakeDamage = function(self, amount)
+            if godModeEnabled then
+                return nil  -- Ігноруємо пошкодження
+            end
+            return self._oldTakeDamage(self, amount)
+        end
+    end
+    
+    -- Метод 2: Миттєве відновлення здоров'я (кожен кадр)
+    local conn1 = v3.RenderStepped:Connect(function()
+        if godModeEnabled and hum and hum.Health < 100 then
+            hum.Health = 100
+            -- Спроба скинути статус падіння
+            if hum:FindFirstChild("HumanoidRootPart") then
+                hum.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end)
+    table.insert(godConnections, conn1)
+    
+    -- Метод 3: Захист від смерті
+    local conn2 = hum.Died:Connect(function()
+        if godModeEnabled then
+            hum.Health = 100
+            hum.BreakJointsOnDeath = false
+            -- Спроба воскреснути через ReplicatedStorage
+            pcall(function()
+                local rs = game:GetService("ReplicatedStorage")
+                if rs:FindFirstChild("Revive") then rs.Revive:FireServer() end
+                if rs:FindFirstChild("Respawn") then rs.Respawn:FireServer() end
+                if rs:FindFirstChild("Character") then rs.Character:FireServer() end
+            end)
+        end
+    end)
+    table.insert(godConnections, conn2)
+    
+    -- Метод 4: Скидання швидкості падіння (щоб уникнути шкоди від падіння)
+    local conn3 = v3.Heartbeat:Connect(function()
+        if godModeEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+            local vel = char.HumanoidRootPart.Velocity
+            if vel.Y < -30 then  -- Якщо швидкість падіння занадто велика
+                char.HumanoidRootPart.Velocity = Vector3.new(vel.X, -10, vel.Z)  -- Обмежуємо
+            end
+        end
+    end)
+    table.insert(godConnections, conn3)
+end
+
+function DisableGodMode()
+    -- Відключаємо всі підключення
+    for _, conn in ipairs(godConnections) do
+        conn:Disconnect()
+    end
+    godConnections = {}
+    
+    -- Відновлюємо TakeDamage
+    local char = v1.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum and hum._oldTakeDamage then
+            hum.TakeDamage = hum._oldTakeDamage
+            hum._oldTakeDamage = nil
+        end
+    end
+end
+
 -- ESP
 v3.Heartbeat:Connect(function()
     local v100=tick();
@@ -223,7 +325,6 @@ end);
 v3.RenderStepped:Connect(function()
     if v5.AimEnabled then
         local targetPart = v7()
-        -- ПОВОРОТ ТІЛЬКИ ЯКЩО МИ НЕ РУХАЄМОСЯ (WASD) АБО ЦІЛЬ ЗАФІКСОВАНА
         if targetPart and not isMoving then
             v4.CFrame = CFrame.new(v4.CFrame.Position, targetPart.Position)
         end
@@ -233,4 +334,4 @@ v3.RenderStepped:Connect(function()
     end
 end)
 
-print("✅ Оновлений скрипт: Lock/Unlock у списку + фікс 'п'яної' ходи!")
+print("✅ Оновлений скрипт: додано God Mode! Використовуй кнопку в меню.")
