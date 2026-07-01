@@ -1,9 +1,25 @@
--- ОЧИЩЕНИЙ СКРИПТ OMNIMAN: ТІЛЬКИ SPEED, ESP, AIMBOT + LOCK/UNLOCK
+-- ОНОВЛЕНИЙ СКРИПТ: НОВИЙ СТИЛЬ LOCK/UNLOCK + ФІКС ХОДИ
 local v0=game:GetService("Players");local v1=v0.LocalPlayer;local v2=game:GetService("UserInputService");local v3=game:GetService("RunService");local v4=workspace.CurrentCamera;local v5={AimEnabled=false,AimPart="Head",TeamCheck=true,WallCheck=false,Ignore096=true,AimbotFOV=450,ESP_Enabled=false,Speed=16,ShowWallUI=false};
 
--- 🔥 НОВІ ЗМІННІ ДЛЯ ФІКСАЦІЇ ЦІЛІ
+-- 🔥 ЗМІННІ ДЛЯ ФІКСАЦІЇ ТА РУХУ
 local lockedTarget = nil
 local isLocked = false
+local isMoving = false -- Флаг руху
+
+-- ВІДСЛІДКОВУЄМО НАТИСКАННЯ КЛАВІШ РУХУ (WASD)
+v2.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.A or 
+       input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.D then
+        isMoving = true
+    end
+end)
+
+v2.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.A or 
+       input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.D then
+        isMoving = false
+    end
+end)
 
 local function v6(v58,v59)
     if ( not v58 or  not v59 or (v58=="") or (v59=="")) then return false;end
@@ -13,9 +29,8 @@ local function v6(v58,v59)
     return (v60[v58] and v60[v58][v59]) or false ;
 end
 
--- 🔄 МОДИФІКОВАНА ФУНКЦІЯ ПОШУКУ ЦІЛІ (З ФІКСАЦІЄЮ)
+-- ФУНКЦІЯ ПОШУКУ ЦІЛІ (З ФІКСАЦІЄЮ)
 local function v7()
-    -- ЯКЩО Є ЗАФІКСОВАНИЙ ГРАВЕЦЬ І ВІН ЖИВИЙ - ЦІЛИМОСЬ У НЬОГО
     if lockedTarget and lockedTarget.Character and lockedTarget.Character:FindFirstChild("Humanoid") and lockedTarget.Character.Humanoid.Health > 0 then
         local v115 = lockedTarget.Character
         local aimPart = v115:FindFirstChild(v5.AimPart) or v115:FindFirstChild("HumanoidRootPart")
@@ -24,7 +39,6 @@ local function v7()
         end
     end
     
-    -- ЯКЩО ФІКСАЦІЇ НЕМАЄ - ШУКАЄМО НАЙБЛИЖЧОГО
     local v61,v62=nil,math.huge;
     for v101,v102 in pairs(v0:GetPlayers()) do
         if ((v102~=v1) and v102.Character) then
@@ -102,49 +116,49 @@ v22.Size=UDim2.new(1,0,0,40);v22.BackgroundTransparency=1;v22.Text="Omniman | Br
 local v29=Instance.new("ScrollingFrame",v16);
 v29.Size=UDim2.new(1, -20,1, -60);v29.Position=UDim2.new(0,10,0,45);
 v29.BackgroundTransparency=1;v29.ScrollBarThickness=0;
-Instance.new("UIListLayout",v29).Padding=UDim.new(0,5);
+local listLayout = Instance.new("UIListLayout",v29)
+listLayout.Padding = UDim.new(0,5)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- 📌 КНОПКА SPEED
-local v35=Instance.new("TextBox",v29);
-v35.Size=UDim2.new(1,0,0,35);v35.BackgroundColor3=Color3.new(0,0,0);v35.BackgroundTransparency=0.6;v35.Text="Speed: 16";v35.TextColor3=Color3.new(1,1,1);v35.Font="GothamBold";v14(v35);Instance.new("UICorner",v35);
-v35.FocusLost:Connect(function() v5.Speed=tonumber(v35.Text:match("%d+")) or 16 ;end);
-
--- 📌 КНОПКА AIMBOT
-local function v46(v89,v90,v91)
-    local v92,v93=v15(v29,UDim2.new(1,0,0,35),UDim2.new(0,0,0,0),v89   .. ": OFF" );
-    v92.MouseButton1Click:Connect(function()
-        v5[v90]= not v5[v90];
-        v93.Text=v89   .. ": "   .. ((v5[v90] and "ON") or "OFF") ;
-        if v91 then v91();end
-    end);
+-- 📌 ФУНКЦІЯ СТВОРЕННЯ КНОПОК (ДЛЯ ВСІХ)
+local function createButton(text, configKey, order)
+    local btn, label = v15(v29, UDim2.new(1,0,0,35), UDim2.new(0,0,0,0), text .. ": OFF")
+    btn.LayoutOrder = order
+    btn.MouseButton1Click:Connect(function()
+        v5[configKey] = not v5[configKey]
+        label.Text = text .. ": " .. ((v5[configKey] and "ON") or "OFF")
+    end)
+    return btn, label
 end
-v46("Aimbot Master","AimEnabled");
 
--- 📌 КНОПКА ESP
-v46("Visuals ESP","ESP_Enabled");
+-- КНОПКИ В ПОРЯДКУ
+createButton("Speed", "Speed", 1)  -- Це поле введення, його обробимо окремо
+-- ТОМУ SPEED РОБИМО ВРУЧНУ
+local speedBox = Instance.new("TextBox", v29)
+speedBox.Size = UDim2.new(1,0,0,35)
+speedBox.BackgroundColor3 = Color3.fromRGB(0,0,0)
+speedBox.BackgroundTransparency = 0.6
+speedBox.Text = "Speed: 16"
+speedBox.TextColor3 = Color3.new(1,1,1)
+speedBox.Font = "GothamBold"
+speedBox.TextSize = 14
+speedBox.LayoutOrder = 1
+v14(speedBox)
+Instance.new("UICorner", speedBox)
+speedBox.FocusLost:Connect(function() v5.Speed = tonumber(speedBox.Text:match("%d+")) or 16 end)
 
--- 🔥 НОВІ КНОПКИ: LOCK / UNLOCK
-local lockBtn = Instance.new("TextButton", v16)
-lockBtn.Size = UDim2.new(0, 100, 0, 30)
-lockBtn.Position = UDim2.new(0, 10, 0, 220)
-lockBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-lockBtn.Text = "🔒 Lock"
-lockBtn.TextColor3 = Color3.new(1,1,1)
-lockBtn.Font = Enum.Font.GothamBold
-lockBtn.TextSize = 14
-Instance.new("UICorner", lockBtn)
-v14(lockBtn, true)
+-- ІНШІ КНОПКИ
+createButton("Aimbot Master", "AimEnabled", 2)
+createButton("Visuals ESP", "ESP_Enabled", 3)
 
-local unlockBtn = Instance.new("TextButton", v16)
-unlockBtn.Size = UDim2.new(0, 100, 0, 30)
-unlockBtn.Position = UDim2.new(0, 120, 0, 220)
-unlockBtn.BackgroundColor3 = Color3.fromRGB(50, 30, 30)
-unlockBtn.Text = "🔓 Unlock"
-unlockBtn.TextColor3 = Color3.new(1,1,1)
-unlockBtn.Font = Enum.Font.GothamBold
-unlockBtn.TextSize = 14
-Instance.new("UICorner", unlockBtn)
-v14(unlockBtn, true)
+-- 🔥 НОВІ КНОПКИ LOCK / UNLOCK (ТАКОГО Ж СТИЛЮ)
+local lockBtn, lockLabel = v15(v29, UDim2.new(1,0,0,35), UDim2.new(0,0,0,0), "🔒 Lock")
+lockBtn.LayoutOrder = 4
+lockLabel.Text = "🔒 Lock"  -- Початковий текст
+
+local unlockBtn, unlockLabel = v15(v29, UDim2.new(1,0,0,35), UDim2.new(0,0,0,0), "🔓 Unlock")
+unlockBtn.LayoutOrder = 5
+unlockLabel.Text = "🔓 Unlock"
 
 -- ЛОГІКА LOCK
 lockBtn.MouseButton1Click:Connect(function()
@@ -156,8 +170,8 @@ lockBtn.MouseButton1Click:Connect(function()
                 if part == currentTarget then
                     lockedTarget = player
                     isLocked = true
+                    lockLabel.Text = "✅ Locked: " .. player.Name
                     lockBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-                    lockBtn.Text = "✅ Locked"
                     print("🎯 Зафіксовано гравця:", player.Name)
                     break
                 end
@@ -172,8 +186,8 @@ end)
 unlockBtn.MouseButton1Click:Connect(function()
     lockedTarget = nil
     isLocked = false
-    lockBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-    lockBtn.Text = "🔒 Lock"
+    lockLabel.Text = "🔒 Lock"
+    lockBtn.BackgroundColor3 = Color3.new(1,1,1)
     print("🔓 Фіксацію знято")
 end)
 
@@ -187,7 +201,7 @@ v47.Visible=false;v12(v47);Instance.new("UIStroke",v47).Color=Color3.fromRGB(150
 v51.MouseButton1Click:Connect(function() v16.Visible=false;v47.Visible=true;end);
 v47.MouseButton1Click:Connect(function() v16.Visible=true;v47.Visible=false;end);
 
--- ESP ТА АНІМАЦІЇ
+-- ESP
 v3.Heartbeat:Connect(function()
     local v100=tick();
     for v107,v108 in pairs(v13) do v108.Rotation=math.sin(v100 * 1.5 ) * 60 ;end
@@ -205,17 +219,18 @@ v3.Heartbeat:Connect(function()
     end
 end);
 
--- ОСНОВНИЙ ЦИКЛ (З ФІКСАЦІЄЮ)
+-- ОСНОВНИЙ ЦИКЛ З ФІКСОМ ХОДИ
 v3.RenderStepped:Connect(function()
     if v5.AimEnabled then
-        local v112 = v7()  -- ВИКОРИСТОВУЄМО НОВУ ФУНКЦІЮ З ФІКСАЦІЄЮ
-        if v112 then
-            v4.CFrame = CFrame.new(v4.CFrame.Position, v112.Position);
+        local targetPart = v7()
+        -- ПОВОРОТ ТІЛЬКИ ЯКЩО МИ НЕ РУХАЄМОСЯ (WASD) АБО ЦІЛЬ ЗАФІКСОВАНА
+        if targetPart and not isMoving then
+            v4.CFrame = CFrame.new(v4.CFrame.Position, targetPart.Position)
         end
     end
     if (v1.Character and v1.Character:FindFirstChild("Humanoid")) then
-        v1.Character.Humanoid.WalkSpeed = v5.Speed;
+        v1.Character.Humanoid.WalkSpeed = v5.Speed
     end
-end);
+end)
 
-print("✅ Оновлений скрипт (тільки Speed, ESP, Aimbot + Lock/Unlock) завантажено!")
+print("✅ Оновлений скрипт: Lock/Unlock у списку + фікс 'п'яної' ходи!")
